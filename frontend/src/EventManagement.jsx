@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from "react";
+import { useState,useEffect} from "react";
+import { apiFetch } from "./api";
 
 /* ═══════════════════════════════════════════════════════
    INITIAL DATA
@@ -246,7 +247,18 @@ export default function App() {
 
   const nav = (s, extra = {}) => { setScreen(s); setCtx2(extra); window.scrollTo(0, 0); };
 
-  const login = (user) => { setSession({ user }); };
+  const login = (user, jwt) => {
+    setSession({ user });
+    if (jwt) localStorage.setItem("token", jwt);
+  };
+
+  useEffect(() => {
+    if (!session) return;
+    apiFetch("/vendors")
+      .then(setVendors)
+      .catch(err => console.error("Failed to load vendors:", err));
+  }, [session]);
+
   const logout = () => { setSession(null); setCart([]); nav("index"); };
 
   // Cart helpers
@@ -350,13 +362,19 @@ function LoginPage({ role, users, login, nav }) {
     return e;
   };
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     const e = validate();
     if (Object.keys(e).length) { setErrors(e); return; }
-    const user = users.find(u => u.username === uname.trim() && u.password === pass && u.role === role);
-    if (!user) { setErrors({ general: "Invalid username or password" }); return; }
-    login(user);
-    nav(cfg.dest);
+    try {
+      const data = await apiFetch("/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ username: uname.trim(), password: pass, role }),
+      });
+      login(data.user, data.token);
+      nav(cfg.dest);
+    } catch (err) {
+      setErrors({ general: err.message });
+    }
   };
 
   return (
@@ -1285,7 +1303,7 @@ function UserPayment({ session, logout, nav, cart, cartTotal, placeOrder, showTo
   const handleOrder = () => {
     const e = validate();
     if (Object.keys(e).length) { setErrors(e); return; }
-    const order = placeOrder(f);
+    placeOrder(f);
     showToast("Order placed successfully!");
     nav("userOrderStatus");
   };
